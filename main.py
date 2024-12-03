@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 
 
 # Функция для получения сессии
-async def get_db():
+def get_db():
     db = SessionLocal()
     try:
         yield db
@@ -25,7 +25,7 @@ async def get_db():
 
 
 # CRUD операции
-async def create_user(db: Session, user: UserCreate):
+def create_user(db: Session, user: UserCreate):
     # Сначала нужно сделать is_actual = False для всех пользователей
     db.query(UserModel).update({"is_actual": False})
     db.commit()
@@ -37,18 +37,18 @@ async def create_user(db: Session, user: UserCreate):
     return db_user
 
 
-async def get_users(db: Session, skip: int = 0, limit: int = 10):
+def get_users(db: Session, skip: int = 0, limit: int = 10):
     return db.query(UserModel).offset(skip).limit(limit).all()
 
 
-async def delete_user(db: Session, user_id: int):
-    user = db.query(UserModel).filter(UserModel.user_id == user_id, UserModel.is_actual == True).first()
+def delete_user(db: Session, user_id: int):
+    user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
     if user:
-        user.is_actual = False
+        db.delete(user)
         db.commit()
-        return {"message": "User successfully deleted"}
+        return {"detail": "Пользователь успешно удален"}
     else:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
 
 
 # Маршруты
