@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from database import Base
+from datetime import datetime
 
 
 # Модель пользователя
@@ -11,4 +12,4 @@ class User(Base):
     surname = Column(String, index=True)
     age = Column(Integer)
     is_actual = Column(Boolean, default=True)
-
+    created_at = Column(DateTime)

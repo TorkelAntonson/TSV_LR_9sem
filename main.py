@@ -26,26 +26,43 @@ def get_db():
 
 # CRUD операции
 def create_user(db: Session, user: UserCreate):
-    # Сначала нужно сделать is_actual = False для всех пользователей
-    db.query(UserModel).update({"is_actual": False})
-    db.commit()
     # Создаем новую запись
-    db_user = UserModel(user_id=user.user_id, name=user.name, surname=user.surname, age=user.age, is_actual=True)
+    db_user = UserModel(user_id=user.user_id, name=user.name, surname=user.surname, age=user.age, is_actual=True, created_at=user.created_at)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    # Сортируем по дате создания в обратном порядке
+    newest_user = (db.query(UserModel).order_by(UserModel.created_at.desc()).first())
+    if newest_user:
+        db.query(UserModel).update({"is_actual": False})  # Сбрасываем is_actual для всех
+        newest_user.is_actual = True #Устанавливаем is_actual только самому свежему
+        db.commit()
     return db_user
 
 
 def get_users(db: Session, skip: int = 0, limit: int = 10):
     return db.query(UserModel).offset(skip).limit(limit).all()
 
+def get_user_by_id(user_id: int, db: Session) -> User:
+    # Ищем пользователя в базе данных по user_id
+    user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
+    if not user:
+        # Если пользователь не найден, выбрасываем исключение
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return user
 
 def delete_user(db: Session, user_id: int):
     user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
     if user:
         db.delete(user)
         db.commit()
+        # Сортируем по дате создания в обратном порядке
+        newest_user = (db.query(UserModel).order_by(UserModel.created_at.desc()).first())
+        if newest_user:
+            db.query(UserModel).update({"is_actual": False})  # Сбрасываем is_actual для всех
+            newest_user.is_actual = True #Устанавливаем is_actual только самому свежему
+            db.commit()
+        
         return {"detail": "Пользователь успешно удален"}
     else:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -56,12 +73,15 @@ def delete_user(db: Session, user_id: int):
 async def create_user_view(user: UserCreate, db: Session = Depends(get_db)):
     return create_user(db=db, user=user)
 
-
 @app.get("/users/", response_model=list[User])
 async def get_users_view(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     return get_users(db=db, skip=skip, limit=limit)
 
+@app.get("/users/{user_id}", response_model=User)
+async def read_user(user_id: int, db: Session = Depends(get_db)):
+    return get_user_by_id(user_id, db)
 
 @app.delete("/users/{user_id}")
 async def delete_user_view(user_id: int, db: Session = Depends(get_db)):
     return delete_user(db=db, user_id=user_id)
+
