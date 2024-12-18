@@ -68,6 +68,31 @@ def delete_user(db: Session, user_id: int):
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
 
+def update_user_attribute(db: Session, user_id: int, attribute: str, value):
+    # Проверяем, существует ли пользователь
+    user = db.query(UserModel).filter(UserModel.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Проверяем, является ли переданный атрибут валидным
+    if not hasattr(UserModel, attribute):
+        raise HTTPException(status_code=400, detail=f"Атрибут '{attribute}' не существует")
+
+    # Обновляем атрибут
+    setattr(user, attribute, value)
+    db.commit()
+    db.refresh(user)
+
+    # Если обновляется `created_at`, необходимо пересчитать `is_actual`
+    if attribute == "created_at":
+        newest_user = db.query(UserModel).order_by(UserModel.created_at.desc()).first()
+        if newest_user:
+            db.query(UserModel).update({"is_actual": False})
+            newest_user.is_actual = True
+            db.commit()
+
+    return user
+
 # Маршруты
 @app.post("/users/", response_model=User)
 async def create_user_view(user: UserCreate, db: Session = Depends(get_db)):
@@ -85,3 +110,11 @@ async def read_user(user_id: int, db: Session = Depends(get_db)):
 async def delete_user_view(user_id: int, db: Session = Depends(get_db)):
     return delete_user(db=db, user_id=user_id)
 
+@app.patch("/users/{user_id}")
+async def update_user_attribute_view(user_id: int, attribute: str, value: str, db: Session = Depends(get_db)):
+    # Если обновляемый атрибут — это `age` или другой числовой тип, преобразуем значение
+    if attribute in ["age"]:
+        value = int(value)
+    elif attribute in ["created_at"]:
+        value = datetime.fromisoformat(value)  # Преобразование строки в дату
+    return update_user_attribute(db=db, user_id=user_id, attribute=attribute, value=value)
